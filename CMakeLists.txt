@@ -11,5 +11,5 @@ add_executable(csv_db src/main.cpp)
 # Testing configuration
 enable_testing()
 
-add_executable(run_tests tests/test_basic.cpp)
+add_executable(run_tests tests/test.cpp)
 add_test(NAME BasicTests COMMAND run_tests)
