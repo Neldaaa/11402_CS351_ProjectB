@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <cstdio>
 
 // TODO: Include your actual headers once implemented
 // #include "../src/CSVParser.h"
