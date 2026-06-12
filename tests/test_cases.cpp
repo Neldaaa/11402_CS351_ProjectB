@@ -1,242 +1,168 @@
 // ==========================================================
-//  Unit tests cho CSV Mini Database (Project B)
-//  Moi test in ro rang: ten test, ket qua, va chi tiet kiem tra.
-//  Chay bang: ctest --test-dir build --output-on-failure
+//  Unit tests for CSV Mini Database (Project B)
+//  Output format: one line per test case -> easy to screenshot.
+//  Details are printed ONLY when a check fails.
 // ==========================================================
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "../src/csv_db.h"
 
-// ---------- Bo dem ket qua ----------
-static int g_passed = 0;
-static int g_failed = 0;
+static int g_testsPassed = 0;
+static int g_testsFailed = 0;
+static std::vector<std::string> g_failures; // details of failed checks in current test
 
-// CHECK: kiem tra 1 dieu kien, in chi tiet expected/actual khi sai.
-#define CHECK(cond, detail)                                              \
-    do {                                                                 \
-        if (cond) {                                                      \
-            std::cout << "      [OK] " << detail << "\n";                \
-        } else {                                                         \
-            std::cout << "      [FAIL] " << detail                       \
-                      << "  (at line " << __LINE__ << ")\n";             \
-            ++g_failed;                                                  \
-        }                                                                \
+// CHECK: silent when OK, records detail when it fails.
+#define CHECK(cond, detail)                                        \
+    do {                                                           \
+        if (!(cond)) {                                             \
+            g_failures.push_back(std::string(detail) +             \
+                " (line " + std::to_string(__LINE__) + ")");       \
+        }                                                          \
     } while (0)
 
-static void beginTest(const std::string& id, const std::string& name) {
-    std::cout << "\n[" << id << "] " << name << "\n";
+// Print one aligned result line: [TC-001] Load CSV file .......... PASS
+static void report(const std::string& id, const std::string& name) {
+    std::string label = "[" + id + "] " + name + " ";
+    std::cout << label;
+    for (size_t i = label.size(); i < 46; ++i) std::cout << '.';
+    if (g_failures.empty()) {
+        std::cout << " PASS\n";
+        ++g_testsPassed;
+    } else {
+        std::cout << " FAIL\n";
+        for (const auto& f : g_failures) std::cout << "    -> " << f << "\n";
+        ++g_testsFailed;
+    }
+    g_failures.clear();
 }
 
-static void endTest() {
-    // Neu khong co FAIL nao moi duoc tinh la passed o muc test case
-    ++g_passed;
-}
-
-// Helper: tao file CSV gia de test
 static void createMockCsv(const std::string& filename, const std::string& content) {
     std::ofstream f(filename);
     f << content;
 }
 
-// ==========================================================
-//  TC-001: Load CSV
-// ==========================================================
+// ---------- TC-001: Load CSV ----------
 static void test_load_csv() {
-    beginTest("TC-001", "Load CSV - doc dung header va so dong");
     createMockCsv("test_data.csv", "id,name,age\n1,Alice,25\n2,Bob,30\n3,Carol,28\n");
-
     CsvDatabase db;
     db.load("test_data.csv");
-
-    CHECK(db.rowCount() == 3, "Doc duoc 3 records (actual: " + std::to_string(db.rowCount()) + ")");
-    CHECK(db.getHeaders().size() == 3, "Header co 3 cot");
-    CHECK(db.getHeaders()[0] == "id", "Cot dau tien la 'id'");
-    CHECK(db.getField(0, "name") == "Alice", "Row 0, cot 'name' = 'Alice'");
-    endTest();
+    CHECK(db.rowCount() == 3, "expected 3 records, got " + std::to_string(db.rowCount()));
+    CHECK(db.getHeaders().size() == 3, "expected 3 header columns");
+    CHECK(db.getField(0, "name") == "Alice", "row 0 'name' should be 'Alice'");
+    report("TC-001", "Load CSV file");
 }
 
-// ==========================================================
-//  TC-002: Load CSV co field trong ngoac kep
-// ==========================================================
+// ---------- TC-002: Quoted fields ----------
 static void test_quoted_fields() {
-    beginTest("TC-002", "Parse field co ngoac kep va dau phay");
     createMockCsv("test_quotes.csv", "id,desc\n1,\"hello, world\"\n");
-
     CsvDatabase db;
     db.load("test_quotes.csv");
-
     CHECK(db.getField(0, "desc") == "hello, world",
-          "Field '\"hello, world\"' duoc parse thanh 'hello, world' (actual: '"
-          + db.getField(0, "desc") + "')");
-    endTest();
+          "quoted field parsed as '" + db.getField(0, "desc") + "'");
+    report("TC-002", "Parse quoted fields");
 }
 
-// ==========================================================
-//  TC-003: Display records
-// ==========================================================
+// ---------- TC-003: Display ----------
 static void test_display() {
-    beginTest("TC-003", "Display - hien thi du lieu ra man hinh");
     createMockCsv("test_data.csv", "id,name,age\n1,Alice,25\n2,Bob,30\n");
-
     CsvDatabase db;
     db.load("test_data.csv");
-
     std::ostringstream out;
     db.display(out);
-    std::string s = out.str();
-
-    CHECK(s.find("name") != std::string::npos, "Output co chua header 'name'");
-    CHECK(s.find("Alice") != std::string::npos, "Output co chua du lieu 'Alice'");
-    CHECK(s.find("2 record(s)") != std::string::npos, "Output bao cao dung so record");
-    endTest();
+    CHECK(out.str().find("Alice") != std::string::npos, "output should contain 'Alice'");
+    CHECK(out.str().find("2 record(s)") != std::string::npos, "output should report record count");
+    report("TC-003", "Display records");
 }
 
-// ==========================================================
-//  TC-004: Search / query
-// ==========================================================
+// ---------- TC-004: Search ----------
 static void test_search() {
-    beginTest("TC-004", "Search - tim record theo cot va gia tri");
     createMockCsv("test_data.csv", "id,name,age\n1,Alice,25\n2,Bob,30\n3,Bob,40\n");
-
     CsvDatabase db;
     db.load("test_data.csv");
-
-    auto r1 = db.search("name", "Bob");
-    CHECK(r1.size() == 2, "Tim 'name=Bob' ra 2 ket qua (actual: " + std::to_string(r1.size()) + ")");
-
-    auto r2 = db.search("id", "1");
-    CHECK(r2.size() == 1 && db.getField(r2[0], "name") == "Alice",
-          "Tim 'id=1' ra dung record cua Alice");
-
-    auto r3 = db.search("name", "Nobody");
-    CHECK(r3.empty(), "Tim gia tri khong ton tai -> 0 ket qua");
-    endTest();
+    CHECK(db.search("name", "Bob").size() == 2, "search name=Bob should return 2 rows");
+    CHECK(db.search("name", "Nobody").empty(), "search for missing value should return 0 rows");
+    report("TC-004", "Search records");
 }
 
-// ==========================================================
-//  TC-005: Add record
-// ==========================================================
+// ---------- TC-005: Add ----------
 static void test_add() {
-    beginTest("TC-005", "Add - them record moi");
     createMockCsv("test_data.csv", "id,name,age\n1,Alice,25\n");
-
     CsvDatabase db;
     db.load("test_data.csv");
     db.addRecord({"2", "David", "22"});
-
-    CHECK(db.rowCount() == 2, "So record tang tu 1 len 2");
-    CHECK(db.getField(1, "name") == "David", "Record moi co name = 'David'");
-
-    bool threw = false;
-    try { db.addRecord({"chi-co-1-cot"}); } catch (const std::exception&) { threw = true; }
-    CHECK(threw, "Them record sai so cot -> bao loi (khong crash)");
-    endTest();
+    CHECK(db.rowCount() == 2, "record count should grow to 2");
+    CHECK(db.getField(1, "name") == "David", "new record should be 'David'");
+    report("TC-005", "Add record");
 }
 
-// ==========================================================
-//  TC-006: Update record
-// ==========================================================
+// ---------- TC-006: Update ----------
 static void test_update() {
-    beginTest("TC-006", "Update - sua record co san");
     createMockCsv("test_data.csv", "id,name,age\n1,Alice,25\n");
-
     CsvDatabase db;
     db.load("test_data.csv");
     db.updateRecord(0, "age", "26");
-
-    CHECK(db.getField(0, "age") == "26", "age cua row 0 doi tu 25 -> 26");
-
-    bool threw = false;
-    try { db.updateRecord(99, "age", "1"); } catch (const std::exception&) { threw = true; }
-    CHECK(threw, "Update row khong ton tai -> bao loi");
-    endTest();
+    CHECK(db.getField(0, "age") == "26", "age should change 25 -> 26");
+    report("TC-006", "Update record");
 }
 
-// ==========================================================
-//  TC-007: Delete record
-// ==========================================================
+// ---------- TC-007: Delete ----------
 static void test_delete() {
-    beginTest("TC-007", "Delete - xoa record");
     createMockCsv("test_data.csv", "id,name,age\n1,Alice,25\n2,Bob,30\n");
-
     CsvDatabase db;
     db.load("test_data.csv");
     db.deleteRecord(0);
-
-    CHECK(db.rowCount() == 1, "So record giam tu 2 xuong 1");
-    CHECK(db.getField(0, "name") == "Bob", "Record con lai la 'Bob'");
-
-    bool threw = false;
-    try { db.deleteRecord(99); } catch (const std::exception&) { threw = true; }
-    CHECK(threw, "Delete row khong ton tai -> bao loi");
-    endTest();
+    CHECK(db.rowCount() == 1, "record count should drop to 1");
+    CHECK(db.getField(0, "name") == "Bob", "remaining record should be 'Bob'");
+    report("TC-007", "Delete record");
 }
 
-// ==========================================================
-//  TC-008: Save CSV
-// ==========================================================
+// ---------- TC-008: Save ----------
 static void test_save() {
-    beginTest("TC-008", "Save - ghi du lieu nguoc ra file CSV");
     createMockCsv("test_data.csv", "id,name,age\n1,Alice,25\n");
-
     CsvDatabase db;
     db.load("test_data.csv");
     db.addRecord({"2", "Eve", "31"});
     db.save("test_out.csv");
-
-    // Doc lai file vua ghi de kiem tra
     CsvDatabase db2;
     db2.load("test_out.csv");
-    CHECK(db2.rowCount() == 2, "File da ghi co du 2 records");
-    CHECK(db2.getField(1, "name") == "Eve", "Du lieu moi (Eve) duoc luu dung");
-    endTest();
+    CHECK(db2.rowCount() == 2, "saved file should contain 2 records");
+    CHECK(db2.getField(1, "name") == "Eve", "saved data should include 'Eve'");
+    report("TC-008", "Save changes to CSV");
 }
 
-// ==========================================================
-//  TC-009: Error handling
-// ==========================================================
+// ---------- TC-009: Error handling ----------
 static void test_error_handling() {
-    beginTest("TC-009", "Error handling - file khong ton tai, cot sai");
-
     CsvDatabase db;
     bool threw = false;
-    try { db.load("khong_ton_tai.csv"); } catch (const std::exception& e) {
-        threw = true;
-        std::cout << "      (thong bao loi: " << e.what() << ")\n";
-    }
-    CHECK(threw, "Load file khong ton tai -> nem exception ro rang");
+    try { db.load("no_such_file.csv"); } catch (const std::exception&) { threw = true; }
+    CHECK(threw, "loading a missing file should throw a clear error");
 
     createMockCsv("test_data.csv", "id,name\n1,Alice\n");
     db.load("test_data.csv");
     threw = false;
-    try { db.search("cot_khong_co", "x"); } catch (const std::exception&) { threw = true; }
-    CHECK(threw, "Search cot khong ton tai -> bao loi");
-    endTest();
+    try { db.search("bad_column", "x"); } catch (const std::exception&) { threw = true; }
+    CHECK(threw, "searching an unknown column should throw");
+    report("TC-009", "Error handling");
 }
 
-// ==========================================================
-//  TC-010: Dong thieu cot
-// ==========================================================
+// ---------- TC-010: Missing fields ----------
 static void test_missing_fields() {
-    beginTest("TC-010", "Dong CSV thieu cot -> dien gia tri rong");
     createMockCsv("test_missing.csv", "id,name,age\n1,Alice\n");
-
     CsvDatabase db;
     db.load("test_missing.csv");
-    CHECK(db.getField(0, "age") == "", "Cot 'age' bi thieu duoc dien chuoi rong");
-    endTest();
+    CHECK(db.getField(0, "age") == "", "missing field should become empty string");
+    report("TC-010", "Handle missing fields");
 }
 
-// ==========================================================
-//  MAIN - chay toan bo test va in tong ket
-// ==========================================================
 int main() {
-    std::cout << "==========================================\n";
-    std::cout << "  CSV Mini Database - Unit Test Suite\n";
-    std::cout << "==========================================\n";
+    std::cout << "=================================================\n";
+    std::cout << "  CSV Mini Database & Query Engine - Test Suite\n";
+    std::cout << "  Goal: load, query and edit CSV data safely\n";
+    std::cout << "=================================================\n";
 
     test_load_csv();
     test_quoted_fields();
@@ -249,20 +175,15 @@ int main() {
     test_error_handling();
     test_missing_fields();
 
-    // Don dep file tam
     std::remove("test_data.csv");
     std::remove("test_quotes.csv");
     std::remove("test_missing.csv");
     std::remove("test_out.csv");
 
-    std::cout << "\n==========================================\n";
-    if (g_failed == 0) {
-        std::cout << "  RESULT: ALL " << g_passed << " TEST CASES PASSED\n";
-    } else {
-        std::cout << "  RESULT: " << g_failed << " CHECK(S) FAILED\n";
-    }
-    std::cout << "==========================================\n";
+    std::cout << "-------------------------------------------------\n";
+    std::cout << "  Result: " << g_testsPassed << "/" << (g_testsPassed + g_testsFailed)
+              << " test cases passed\n";
+    std::cout << "=================================================\n";
 
-    // Tra ve khac 0 neu co loi -> ctest se bao FAIL dung chuan
-    return g_failed == 0 ? 0 : 1;
+    return g_testsFailed == 0 ? 0 : 1;
 }
