@@ -1,0 +1,11 @@
+# CMake/Build directories
+build/
+out/
+bin/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
