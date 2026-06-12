@@ -6,10 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Main application executable
 add_executable(csv_db src/main.cpp)
-# TODO: add your other source files here, e.g., src/CSVParser.cpp src/QueryEngine.cpp
 
 # Testing configuration
 enable_testing()
 
-add_executable(run_tests tests/test.cpp)
+add_executable(run_tests tests/test_cases.cpp)
 add_test(NAME BasicTests COMMAND run_tests)
