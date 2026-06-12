@@ -26,7 +26,7 @@ jobs:
         run: cmake --build build --parallel
 
       - name: Run unit tests
-        run: ctest --test-dir build --verbose
+        run: ./build/run_tests
         
 
       - name: Build Docker image
