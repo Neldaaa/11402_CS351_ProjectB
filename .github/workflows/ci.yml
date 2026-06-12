@@ -27,6 +27,7 @@ jobs:
 
       - name: Run unit tests
         run: ctest --test-dir build --output-on-failure
+        
 
       - name: Build Docker image
         run: docker build -t csv-db-ci .
